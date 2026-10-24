@@ -1,0 +1,1 @@
+{"backend": "lightgbm", "params": {"leaves": 32, "mcs": 200}, "n_trees": 1882, "valid_deviance": 0.301305560091273}
