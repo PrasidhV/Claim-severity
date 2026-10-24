@@ -30,4 +30,5 @@ if command -v Rscript >/dev/null; then
   Rscript r/12_freq_glm_plus.R            # better-specified GLM: splines + screened interactions (R)
 fi
 python src/12_freq_glm_plus.py            # does that GLM close the gap to the GBM? (nested CV; slow, ~15 min on real data)
-echo "Done. See results/results.md, cv_results.md, freq_results.md, freq_cv_results.md, freq_glm_plus_results.md"
+python src/13_freq_gbm_additive.py        # GBM complexity ladder: is the GBM edge interactions or main-effect shape?
+echo "Done. See results/results.md, cv_results.md, freq_results.md, freq_cv_results.md, freq_glm_plus_results.md, freq_gbm_ladder.md"

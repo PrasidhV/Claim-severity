@@ -20,6 +20,7 @@ actuary would build, and which one would I trust to price with? Pure premium is 
 | 10 | Python | `src/10_freq_cv.py` | Frequency 5-fold CV with selection nested inside each fold |
 | 11 | Python | `src/11_freq_explain.py` | SHAP and GLM-vs-GBM effects for frequency |
 | 12 | **R** + Python | `r/12_freq_glm_plus.R`, `src/glm_plus.py`, `src/12_freq_glm_plus.py` | A better-specified frequency GLM (piecewise-linear splines, bonus-malus = 50 indicator, two interactions chosen by a Rao score test on the training data only) scored on the same nested folds, to test whether the GBM's edge is just a basic GLM |
+| 13 | Python | `src/13_freq_gbm_additive.py` | GBM complexity ladder (stumps = additive, up to 32 leaves) to show whether the GBM's edge is interactions or main-effect shape |
 | 6 | Python | `src/06_cv.py` | 5-fold cross-validation with model selection nested inside each fold: constant, driver-age-only GLM, full GLM, F-test-selected GLM, GBM |
 | – | Python | `src/02b_glm_crosscheck.py` | Same GLM re-fit in scikit-learn. Test deviance should match R to ~3 decimals; if it doesn't, one of them has a bug |
 

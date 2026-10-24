@@ -3,8 +3,8 @@
 # and this script should give the same test deviance.
 #   main effects : linear + hinge terms max(x - knot, 0) for driver age, bonus-malus, vehicle age, log-density;
 #                  bonus-malus == 50 indicator; factors for gas, area, vehicle power, brand, region
-#   interactions : top 2 of all 15 pairwise products of six standardised variables, ranked by add1(test = "Rao")
-#                  on the fitting data only. Inference uses the Pearson dispersion (quasi-Poisson).
+#   interactions : top 2 of all 15 pairwise products of six standardised variables, ranked by the Rao score test
+#                  computed directly on the fitting data only. Inference uses the Pearson dispersion (quasi-Poisson).
 
 suppressPackageStartupMessages({ library(DBI); library(RSQLite) })
 args   <- commandArgs(trailingOnly = FALSE)
@@ -56,9 +56,19 @@ for (v in cat_vars) {                      # unseen test levels -> base level
 main  <- c(names(knots), hinge_names, "bm50", cat_vars)
 base  <- glm(as.formula(paste("claim_nb ~", paste(main, collapse = " + "), "+ offset(log(exposure))")),
              family = poisson(link = "log"), data = fit_df)
-sc    <- add1(base, scope = as.formula(paste("~ . +", paste(cand, collapse = " + "))), test = "Rao")
-sc    <- sc[rownames(sc) != "<none>", ]
-top   <- rownames(sc)[order(-sc[["Rao score"]])][1:2]
+# Rao score test for each candidate, computed directly (same formula as src/glm_plus.py). add1(test = "Rao")
+# returned all-zero scores on this data, so ranking silently fell back to candidate order; do not use it here.
+X    <- model.matrix(base); mu <- fitted(base); y <- fit_df$claim_nb   # mu = expected counts (offset included)
+A    <- crossprod(X * mu, X)                                           # X' W X, W = mu for Poisson/log
+Ainv <- tryCatch(solve(A), error = function(e) MASS::ginv(A))
+C    <- as.matrix(fit_df[, cand])
+u    <- colSums(C * (y - mu))                                          # score for each candidate
+icc  <- colSums(C^2 * mu)
+icx  <- crossprod(X, C * mu)
+rao  <- as.numeric(u^2 / (icc - colSums(icx * (Ainv %*% icx))))        # score^2 / information adjusted for the base model
+names(rao) <- cand
+if (length(unique(round(rao, 6))) < 2) stop("Rao scores are all identical: interaction screening failed")
+top   <- names(sort(rao, decreasing = TRUE))[1:2]
 glm_p <- update(base, as.formula(paste(". ~ . +", paste(top, collapse = " + "))))
 
 pois_dev <- function(y, mu) mean(2 * (ifelse(y > 0, y * log(y / mu), 0) - (y - mu)))
@@ -69,6 +79,6 @@ cat("interactions chosen:", paste(top, collapse = ", "), "\n")
 
 write.csv(data.frame(idpol = test_df$idpol, y = test_df$claim_nb, exposure = test_df$exposure, pred = pred),
           file.path(out, "freq_glm_plus_r_test_preds.csv"), row.names = FALSE)
-write.csv(data.frame(interaction = rownames(sc), rao_score = sc[["Rao score"]]),
+write.csv(data.frame(interaction = cand, rao_score = rao),
           file.path(out, "freq_glm_plus_interaction_scores.csv"), row.names = FALSE)
 cat("wrote outputs/freq_glm_plus_r_test_preds.csv, freq_glm_plus_interaction_scores.csv\n")
