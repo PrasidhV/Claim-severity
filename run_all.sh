@@ -16,4 +16,14 @@ python src/03_gbm.py                      # LightGBM, Gamma objective
 python src/04_compare.py                  # deviance, bootstrap CI, calibration, double lift
 python src/05_explain.py                  # SHAP + GLM-vs-GBM effect plots (with GLM confidence intervals)
 python src/06_cv.py                       # 5-fold CV, selection nested in folds, vs a constant benchmark
-echo "Done. See results/results.md and results/cv_results.md"
+
+# ---- frequency model (Poisson, exposure offset) ----
+if command -v Rscript >/dev/null; then
+  Rscript r/07_freq_glm.R                 # baseline Poisson GLM in R
+fi
+python src/07b_freq_glm_crosscheck.py     # same GLM in Python (validates R)
+python src/08_freq_gbm.py                 # LightGBM, Poisson objective
+python src/09_freq_compare.py             # deviance, bootstrap CIs, calibration, double lift, constant benchmark
+python src/10_freq_cv.py                  # 5-fold CV, selection nested in folds
+python src/11_freq_explain.py             # SHAP + GLM-vs-GBM effects
+echo "Done. See results/results.md, cv_results.md, freq_results.md, freq_cv_results.md"

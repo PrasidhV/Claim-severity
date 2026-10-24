@@ -14,6 +14,7 @@ The GLM is fitted by iteratively reweighted least squares in plain numpy (for Ga
 working weights are just the prior weights), so no statsmodels is needed. It matches R's glm().
 """
 import json
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from scipy.stats import f as fdist
 from common import (CAT, FEATURES, GLM_CATS, GLM_NUM, OUT, RES, SEED, gamma_dev_terms,
                     load_model_frame)
 
+warnings.filterwarnings("ignore", message=".*eval_set.*deprecated.*")
 K = 5
 P_KEEP = 0.10
 

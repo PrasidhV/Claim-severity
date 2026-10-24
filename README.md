@@ -1,8 +1,8 @@
-# Claim severity: actuarial GLM vs gradient boosting (SQL + R + Python)
+# Claim frequency and severity: actuarial GLM vs gradient boosting (SQL + R + Python)
 
 **Question:** for French motor third-party liability claims, can a gradient-boosted model predict
-*claim severity* (average cost per claim) better than the GLM an actuary would build, and which
-one would I trust to price with?
+*claim severity* (average cost per claim) and *claim frequency* (claims per exposure-year) better than the GLM an
+actuary would build, and which one would I trust to price with? Pure premium is frequency x severity, so both are modelled the same way and compared on the same terms.
 
 **Data:** freMTPL2freq + freMTPL2sev, public (OpenML 41214 / 41215), ~678k policies, ~25k with claims.
 
@@ -13,6 +13,12 @@ one would I trust to price with?
 | 3 | **Python** | `src/03_gbm.py` | LightGBM, Gamma objective, small grid, early stopping on the validation split |
 | 4 | Python | `src/04_compare.py` | Test deviance and bias for GLM, GBM and a **constant-prediction benchmark**; paired-bootstrap CIs on the differences; calibration and double-lift charts |
 | 5 | Python | `src/05_explain.py` | SHAP importance and beeswarm; GBM effects overlaid on GLM relativities with confidence intervals |
+| 7 | **SQL** + **R** | `sql/04_frequency.sql`, `r/07_freq_glm.R` | Frequency table (all policies, claim count, exposure); Poisson GLM with a log-exposure offset, banded factors, quasi-Poisson F-tests and CIs (Pearson dispersion) |
+| 7b | Python | `src/07b_freq_glm_crosscheck.py` | Same Poisson GLM in numpy; validates R |
+| 8 | Python | `src/08_freq_gbm.py` | LightGBM, Poisson objective on the claim rate with exposure weights |
+| 9 | Python | `src/09_freq_compare.py` | Test Poisson deviance vs a constant claim rate, bootstrap CIs, calibration, double lift |
+| 10 | Python | `src/10_freq_cv.py` | Frequency 5-fold CV with selection nested inside each fold |
+| 11 | Python | `src/11_freq_explain.py` | SHAP and GLM-vs-GBM effects for frequency |
 | 6 | Python | `src/06_cv.py` | 5-fold cross-validation with model selection nested inside each fold: constant, driver-age-only GLM, full GLM, F-test-selected GLM, GBM |
 | – | Python | `src/02b_glm_crosscheck.py` | Same GLM re-fit in scikit-learn. Test deviance should match R to ~3 decimals; if it doesn't, one of them has a bug |
 
@@ -22,7 +28,8 @@ pip install -r requirements.txt     # + in R: install.packages(c("DBI","RSQLite"
 ./run_all.sh                        # real data (needs internet for OpenML)
 ./run_all.sh --synthetic            # offline smoke test on fake data with the same schema
 ```
-Outputs: `outputs/dq_report.txt`, **`results/results.md`** (single train/test split), **`results/cv_results.md`** (5-fold cross-validation), `results/*.png`.
+Outputs: `outputs/dq_report.txt`, **`results/results.md`** (single train/test split), **`results/cv_results.md`** (severity 5-fold cross-validation), **`results/freq_results.md`** and **`results/freq_cv_results.md`** (the same two views for frequency), `results/*.png`.
+The frequency steps need the `model_frequency` table: `src/01_build_db.py` builds it, so rebuild the database once after pulling these files.
 On Windows run the script in Git Bash, not `cmd`.
 
 ## Design decisions worth defending
@@ -39,13 +46,18 @@ On Windows run the script in Git Bash, not `cmd`.
   find its own cut-points is the point of the comparison.
 - **Don't trust a point estimate on ~5k claims.** Test claims are few, so `04_compare.py` reports a
   paired bootstrap CI for the deviance gap rather than just "model A < model B".
+- **Frequency uses an exposure offset.** Claim counts are modelled as Poisson with log(exposure) as an offset (GBM: the
+  claim rate with exposure as the sample weight, which is the same likelihood). ClaimNb is capped at 4. Severity is modelled
+  only on policies with claims; frequency on all valid policies.
 - **Always include a constant benchmark.** "Predict the average severity for everyone" is the bar a model
   must clear. Severity is noisy enough that a model can look sophisticated and still lose to it.
 - **Cross-validate with selection inside the folds.** `06_cv.py` re-runs the factor-selection step on each
   fold's training data, so choosing factors cannot leak information from the held-out fold.
 
 ## Methodological note: which F-test
-R's `drop1(fit, test = "F")` scales the test by the *deviance-based* dispersion (residual deviance divided by residual degrees of freedom), whereas `summary()` reports the *Pearson* dispersion. For well-behaved data these are close. For heavy-tailed claim severities they can differ several-fold, which makes every F-statistic look far more impressive than it is and nearly every rating factor appear significant. `r/02_glm.R` therefore refits the model without each term and computes the F-test with the Pearson dispersion (output: `outputs/glm_term_tests.csv`). `src/06_cv.py` uses the same test when it selects factors inside each fold.
+For the Poisson frequency GLM the issue is related: R's `summary()` fixes the Poisson dispersion at 1, so its standard errors and p-values assume no overdispersion. `r/07_freq_glm.R` estimates the Pearson dispersion and uses it for standard errors and F-tests (quasi-Poisson inference).
+
+For the severity GLM, R's `drop1(fit, test = "F")` scales the test by the *deviance-based* dispersion (residual deviance divided by residual degrees of freedom), whereas `summary()` reports the *Pearson* dispersion. For well-behaved data these are close. For heavy-tailed claim severities they can differ several-fold, which makes every F-statistic look far more impressive than it is and nearly every rating factor appear significant. `r/02_glm.R` therefore refits the model without each term and computes the F-test with the Pearson dispersion (output: `outputs/glm_term_tests.csv`). `src/06_cv.py` uses the same test when it selects factors inside each fold.
 
 ## Results
 Run the pipeline and read `results/results.md` (one fixed train/test split) and `results/cv_results.md`
@@ -76,7 +88,7 @@ monitored second stage. If the GBM wins decisively and calibrates well, use it, 
 reason codes and the GLM kept as the benchmark.
 
 ## Limitations
-- Severity only; a real pricing model multiplies this by a frequency model (`ClaimNb`, Poisson, exposure offset).
+- Frequency and severity are modelled and evaluated separately; combining them into a pure-premium model and scoring that on actual loss cost is not done here.
 - Random hash split, not out-of-time, so it flatters both models relative to deployment.
 - SQLite rather than Postgres; the SQL is standard (window functions, CTEs) and ports directly.
 - No monotonic constraints, fairness checks or full hyper-parameter search on the GBM.

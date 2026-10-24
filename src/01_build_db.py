@@ -33,6 +33,7 @@ if __name__ == "__main__":
         pd.read_csv(RAW / "freMTPL2freq.csv").to_sql("raw_freq", con, if_exists="append", index=False)
         pd.read_csv(RAW / "freMTPL2sev.csv").to_sql("raw_sev", con, if_exists="append", index=False)
         run_script(con, SQL / "02_clean.sql")
+        run_script(con, SQL / "04_frequency.sql")
         report = run_checks(con, SQL / "03_checks.sql")
     (OUT / "dq_report.txt").write_text(report)
     print(report)

@@ -48,3 +48,27 @@ def gamma_deviance(y, mu, w):
     """Weighted mean Gamma deviance (lower is better)."""
     w = np.asarray(w, float)
     return gamma_dev_terms(y, mu, w).sum() / w.sum()
+
+
+# ---------------------------------------------------------------- frequency model helpers
+def load_frequency_frame() -> pd.DataFrame:
+    """All valid policies (claimants and non-claimants): target claim_nb, offset exposure."""
+    with sqlite3.connect(DB) as con:
+        df = pd.read_sql("SELECT * FROM model_frequency ORDER BY idpol", con)
+    df["log_density"] = np.log(df["density"])
+    df["area_ord"] = df["area"].map({c: i for i, c in enumerate("ABCDEF")})
+    for c in CAT:
+        df[c] = df[c].astype("category")
+    return df
+
+
+def poisson_dev_terms(y, mu):
+    """Per-policy Poisson deviance contributions; mu is the predicted COUNT (rate x exposure)."""
+    y, mu = np.asarray(y, float), np.asarray(mu, float)
+    ylogy = np.where(y > 0, y * np.log(np.where(y > 0, y, 1.0) / mu), 0.0)
+    return 2.0 * (ylogy - (y - mu))
+
+
+def poisson_deviance(y, mu):
+    """Mean Poisson deviance per policy (lower is better)."""
+    return poisson_dev_terms(y, mu).mean()

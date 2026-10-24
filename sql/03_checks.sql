@@ -44,3 +44,17 @@ FROM model_severity GROUP BY driv_age_band ORDER BY driv_age_band;
 SELECT bm_band, COUNT(*) AS policies, SUM(n_claims) AS claims,
        ROUND(SUM(avg_severity * n_claims) / SUM(n_claims), 0) AS mean_severity
 FROM model_severity GROUP BY bm_band ORDER BY bm_band;
+
+-- name: frequency_split_sizes
+SELECT split, COUNT(*) AS policies, SUM(claim_nb) AS claims,
+       ROUND(SUM(exposure), 0) AS exposure_years,
+       ROUND(SUM(claim_nb) / SUM(exposure), 4) AS claims_per_year
+FROM model_frequency GROUP BY split ORDER BY split;
+
+-- name: claim_count_distribution
+SELECT claim_nb, COUNT(*) AS policies FROM model_frequency GROUP BY claim_nb ORDER BY claim_nb;
+
+-- name: frequency_by_driver_age_band
+SELECT driv_age_band, COUNT(*) AS policies, ROUND(SUM(exposure), 0) AS exposure_years,
+       SUM(claim_nb) AS claims, ROUND(SUM(claim_nb) / SUM(exposure), 4) AS claims_per_year
+FROM model_frequency GROUP BY driv_age_band ORDER BY driv_age_band;
