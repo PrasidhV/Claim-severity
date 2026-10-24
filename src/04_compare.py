@@ -37,18 +37,30 @@ for name, p in [(glm_label, p_glm), (f"GBM ({meta['backend'].split(' ')[0]})", p
     dev = gamma_deviance(y, p, w)
     rows.append(dict(model=name, test_deviance=dev, deviance_explained=1 - dev / dev_null,
                      bias=np.sum(w * p) / np.sum(w * y) - 1))
+# constant prediction baseline: claim-weighted mean severity of train+valid
+rows.append(dict(model="Constant (null_mu)", test_deviance=dev_null, deviance_explained=0.0,
+                 bias=np.sum(w * null_mu) / np.sum(w * y) - 1))
 res = pd.DataFrame(rows)
 
-# paired bootstrap over test policies: GLM deviance minus GBM deviance (>0 => GBM better)
+# paired bootstrap over test policies: A deviance minus B deviance (>0 => B better)
 rng = np.random.default_rng(SEED)
 t_glm, t_gbm = gamma_dev_terms(y, p_glm, w), gamma_dev_terms(y, p_gbm, w)
+t_const = gamma_dev_terms(y, np.full_like(y, null_mu), w)
 n = len(y)
 diffs = np.empty(2000)
+diffs_gc = np.empty(2000)   # GLM minus constant
+diffs_bc = np.empty(2000)   # GBM minus constant
 for b in range(2000):
     i = rng.integers(0, n, n)
     diffs[b] = (t_glm[i].sum() - t_gbm[i].sum()) / w[i].sum()
+    diffs_gc[b] = (t_glm[i].sum() - t_const[i].sum()) / w[i].sum()
+    diffs_bc[b] = (t_gbm[i].sum() - t_const[i].sum()) / w[i].sum()
 lo, hi = np.percentile(diffs, [2.5, 97.5])
+lo_gc, hi_gc = np.percentile(diffs_gc, [2.5, 97.5])
+lo_bc, hi_bc = np.percentile(diffs_bc, [2.5, 97.5])
 point = gamma_deviance(y, p_glm, w) - gamma_deviance(y, p_gbm, w)
+point_gc = gamma_deviance(y, p_glm, w) - dev_null
+point_bc = gamma_deviance(y, p_gbm, w) - dev_null
 
 # ---------- plots ----------
 def binned(pred, key, q):
@@ -84,6 +96,12 @@ plt.savefig(RES / "calibration_and_lift.png", dpi=130)
 verdict = ("GBM is better by more than sampling noise" if lo > 0 else
            "GLM is better by more than sampling noise" if hi < 0 else
            "the difference is within sampling noise (95% CI includes 0)")
+verdict_gc = ("constant is better than GLM by more than sampling noise" if lo_gc > 0 else
+              "GLM is better than constant by more than sampling noise" if hi_gc < 0 else
+              "the difference is within sampling noise (95% CI includes 0)")
+verdict_bc = ("constant is better than GBM by more than sampling noise" if lo_bc > 0 else
+              "GBM is better than constant by more than sampling noise" if hi_bc < 0 else
+              "the difference is within sampling noise (95% CI includes 0)")
 md = [f"# Test-set results\n",
       f"Data: **{'SYNTHETIC - pipeline test only, not a finding' if is_synthetic() else 'real freMTPL2 (public)'}**  ",
       f"Test policies with claims: {n:,}; claims: {int(w.sum()):,}  ",
@@ -91,6 +109,10 @@ md = [f"# Test-set results\n",
       res.to_markdown(index=False, floatfmt=".4f"), "",
       f"Paired bootstrap, GLM minus GBM deviance: **{point:+.4f}** (95% CI {lo:+.4f} to {hi:+.4f}) "
       f"-> {verdict}.\n",
+      f"Paired bootstrap, GLM minus constant deviance: **{point_gc:+.4f}** (95% CI {lo_gc:+.4f} to {hi_gc:+.4f}) "
+      f"-> {verdict_gc}.\n",
+      f"Paired bootstrap, GBM minus constant deviance: **{point_bc:+.4f}** (95% CI {lo_bc:+.4f} to {hi_bc:+.4f}) "
+      f"-> {verdict_bc}.\n",
       "![calibration and lift](calibration_and_lift.png)\n"]
 (RES / "results.md").write_text("\n".join(md))
 print("\n".join(md))

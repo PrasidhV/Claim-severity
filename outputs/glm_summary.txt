@@ -78,21 +78,13 @@ AIC: 361529
 
 Number of Fisher Scoring iterations: 7
 
-Single term deletions
-
-Model:
-avg_severity ~ driv_age_band + veh_age_band + bm_band + veh_gas + 
-    area + veh_power_g + veh_brand + region + log_density
-              Df Deviance    AIC F value    Pr(>F)    
-<none>              27181 361529                      
-driv_age_band  6    27299 361532 14.4097 < 2.2e-16 ***
-veh_age_band   5    27211 361523  4.3697  0.000562 ***
-bm_band        4    27221 361526  7.3484 6.565e-06 ***
-veh_gas        1    27182 361527  0.7250  0.394523    
-area           5    27221 361524  5.8043 2.316e-05 ***
-veh_power_g    8    27249 361522  6.1991 5.012e-08 ***
-veh_brand     10    27262 361519  5.9267 5.155e-09 ***
-region        21    27399 361515  7.5979 < 2.2e-16 ***
-log_density    1    27192 361528  8.1221  0.004377 ** 
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+           term df         F          p
+1 driv_age_band  6 2.5579123 0.01774964
+2  veh_age_band  5 0.7756820 0.56706404
+3       bm_band  4 1.3044266 0.26572042
+4       veh_gas  1 0.1286945 0.71979328
+5          area  5 1.0303448 0.39767876
+6   veh_power_g  8 1.1004193 0.35920955
+7     veh_brand 10 1.0520606 0.39611968
+8        region 21 1.3487305 0.13139560
+9   log_density  1 1.4417759 0.22986648

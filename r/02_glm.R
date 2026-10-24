@@ -58,7 +58,17 @@ rel <- data.frame(term = rownames(est), relativity = exp(est[, "Estimate"]),
                   lo = exp(ci[, 1]), hi = exp(ci[, 2]), p_value = est[, "Pr(>|t|)"])
 write.csv(rel, file.path(out, "glm_relativities.csv"), row.names = FALSE)
 
-# Which rating factors earn their keep? (F-test for dropping each term)
-capture.output(summary(glm_fit), drop1(glm_fit, test = "F"),
-               file = file.path(out, "glm_summary.txt"))
+# Per-term F-tests using the PEARSON dispersion (what summary() uses). drop1(test = "F")
+# divides by residual deviance / df, which is ~5x too small for heavy-tailed severities.
+phi <- summary(glm_fit)$dispersion
+tt <- do.call(rbind, lapply(attr(terms(glm_fit), "term.labels"), function(t) {
+  small <- update(glm_fit, as.formula(paste(". ~ . -", t)))
+  ddf   <- df.residual(small) - df.residual(glm_fit)
+  Fval  <- ((deviance(small) - deviance(glm_fit)) / ddf) / phi
+  data.frame(term = t, df = ddf, F = Fval,
+             p = pf(Fval, ddf, df.residual(glm_fit), lower.tail = FALSE))
+}))
+write.csv(tt, file.path(out, "glm_term_tests.csv"), row.names = FALSE)
+capture.output(summary(glm_fit), tt, file = file.path(out, "glm_summary.txt"))
+print(tt, digits = 3)
 cat("wrote outputs/glm_r_test_preds.csv, glm_relativities.csv, glm_summary.txt\n")
