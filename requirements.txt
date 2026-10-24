@@ -1,0 +1,9 @@
+pandas
+numpy
+scikit-learn>=1.4
+lightgbm
+shap
+matplotlib
+tabulate
+joblib
+# R side (install.packages(c("DBI", "RSQLite")))
