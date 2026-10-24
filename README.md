@@ -19,6 +19,7 @@ actuary would build, and which one would I trust to price with? Pure premium is 
 | 9 | Python | `src/09_freq_compare.py` | Test Poisson deviance vs a constant claim rate, bootstrap CIs, calibration, double lift |
 | 10 | Python | `src/10_freq_cv.py` | Frequency 5-fold CV with selection nested inside each fold |
 | 11 | Python | `src/11_freq_explain.py` | SHAP and GLM-vs-GBM effects for frequency |
+| 12 | **R** + Python | `r/12_freq_glm_plus.R`, `src/glm_plus.py`, `src/12_freq_glm_plus.py` | A better-specified frequency GLM (piecewise-linear splines, bonus-malus = 50 indicator, two interactions chosen by a Rao score test on the training data only) scored on the same nested folds, to test whether the GBM's edge is just a basic GLM |
 | 6 | Python | `src/06_cv.py` | 5-fold cross-validation with model selection nested inside each fold: constant, driver-age-only GLM, full GLM, F-test-selected GLM, GBM |
 | – | Python | `src/02b_glm_crosscheck.py` | Same GLM re-fit in scikit-learn. Test deviance should match R to ~3 decimals; if it doesn't, one of them has a bug |
 
@@ -49,6 +50,7 @@ On Windows run the script in Git Bash, not `cmd`.
 - **Frequency uses an exposure offset.** Claim counts are modelled as Poisson with log(exposure) as an offset (GBM: the
   claim rate with exposure as the sample weight, which is the same likelihood). ClaimNb is capped at 4. Severity is modelled
   only on policies with claims; frequency on all valid policies.
+- **Give the GLM a fair fight.** A GBM beating a crude GLM is not evidence the GBM is better. `12_freq_glm_plus.py` gives the GLM the shapes and interactions a good actuary would try, selecting the interactions with a score test inside each fold so the GBM never influences the GLM, and reports the share of the GBM's advantage the GLM recovers.
 - **Always include a constant benchmark.** "Predict the average severity for everyone" is the bar a model
   must clear. Severity is noisy enough that a model can look sophisticated and still lose to it.
 - **Cross-validate with selection inside the folds.** `06_cv.py` re-runs the factor-selection step on each

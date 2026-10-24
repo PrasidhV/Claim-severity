@@ -1,0 +1,16 @@
+"interaction","rao_score"
+"ix_driv_age_c__bonus_malus_c",0
+"ix_driv_age_c__veh_age_c",0
+"ix_driv_age_c__log_density",0
+"ix_driv_age_c__veh_power",0
+"ix_driv_age_c__gas_diesel",0
+"ix_bonus_malus_c__veh_age_c",0
+"ix_bonus_malus_c__log_density",0
+"ix_bonus_malus_c__veh_power",0
+"ix_bonus_malus_c__gas_diesel",0
+"ix_veh_age_c__log_density",0
+"ix_veh_age_c__veh_power",0
+"ix_veh_age_c__gas_diesel",0
+"ix_log_density__veh_power",0
+"ix_log_density__gas_diesel",0
+"ix_veh_power__gas_diesel",0

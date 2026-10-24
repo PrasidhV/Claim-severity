@@ -26,4 +26,8 @@ python src/08_freq_gbm.py                 # LightGBM, Poisson objective
 python src/09_freq_compare.py             # deviance, bootstrap CIs, calibration, double lift, constant benchmark
 python src/10_freq_cv.py                  # 5-fold CV, selection nested in folds
 python src/11_freq_explain.py             # SHAP + GLM-vs-GBM effects
-echo "Done. See results/results.md, cv_results.md, freq_results.md, freq_cv_results.md"
+if command -v Rscript >/dev/null; then
+  Rscript r/12_freq_glm_plus.R            # better-specified GLM: splines + screened interactions (R)
+fi
+python src/12_freq_glm_plus.py            # does that GLM close the gap to the GBM? (nested CV; slow, ~15 min on real data)
+echo "Done. See results/results.md, cv_results.md, freq_results.md, freq_cv_results.md, freq_glm_plus_results.md"
