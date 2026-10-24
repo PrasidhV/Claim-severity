@@ -53,7 +53,8 @@ if HAVE_SHAP:
 # ---------------- GBM effect vs GLM relativity, by rating band ----------------
 BANDS = {"driv_age_band": "driv_age_c", "veh_age_band": "veh_age_c", "bm_band": "bonus_malus_c"}
 glm_rel_path = OUT / "glm_relativities.csv"
-glm_rel = pd.read_csv(glm_rel_path).set_index("term")["relativity"] if glm_rel_path.exists() else None
+glm_tab = pd.read_csv(glm_rel_path).set_index("term") if glm_rel_path.exists() else None
+glm_rel = glm_tab["relativity"] if glm_tab is not None else None
 if glm_rel is None:
     print("!! outputs/glm_relativities.csv not found (R not run): plotting GBM effects only")
 
@@ -78,10 +79,14 @@ for ax, (band, feat) in zip(axes, BANDS.items()):
     gbm_rel = np.exp(e - e[base])
     ax.plot(range(len(e)), gbm_rel.values, "^--", color="tab:orange", label="GBM (" + ("SHAP" if HAVE_SHAP else "PDP") + ")")
     if glm_rel is not None:
-        g = [1.0 if l == base else glm_rel.get(f"{band}{l}", np.nan) for l in e.index]
-        ax.plot(range(len(e)), g, "s-", color="tab:blue", label="GLM relativity")
+        def pick(col):   # base level has relativity 1 and no interval
+            return np.array([1.0 if l == base else glm_tab[col].get(f"{band}{l}", np.nan) for l in e.index])
+        g, lo_, hi_ = pick("relativity"), pick("lo"), pick("hi")
+        ax.errorbar(range(len(e)), g, yerr=[g - lo_, hi_ - g], fmt="s-", color="tab:blue",
+                    capsize=3, label="GLM relativity (95% CI)")
     ax.set_xticks(range(len(e))); ax.set_xticklabels([l.split(": ")[1] for l in e.index], rotation=30)
     ax.axhline(1, color="grey", lw=.7); ax.set_title(f"{band} (base = {base.split(': ')[1]})")
     ax.set_ylabel("relativity vs base level"); ax.legend()
-plt.tight_layout(); plt.savefig(RES / "glm_vs_gbm_effects.png", dpi=130)
+fig.suptitle("GBM SHAP effects are regularised (shrunk): compare direction, not size", fontsize=10)
+plt.tight_layout(rect=[0, 0, 1, 0.95]); plt.savefig(RES / "glm_vs_gbm_effects.png", dpi=130)
 print("importance:\n", imp.sort_values(ascending=False).round(4).to_string())

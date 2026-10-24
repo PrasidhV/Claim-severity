@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end run. Usage:  ./run_all.sh            (real freMTPL2 data, needs internet)
+# End-to-end run. On Windows, run this in Git Bash (not cmd). Usage:  ./run_all.sh            (real freMTPL2 data, needs internet)
 #                         ./run_all.sh --synthetic (offline pipeline test; results are NOT findings)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -14,5 +14,6 @@ fi
 python src/02b_glm_crosscheck.py          # same GLM in Python: validates R, and backs it up
 python src/03_gbm.py                      # LightGBM, Gamma objective
 python src/04_compare.py                  # deviance, bootstrap CI, calibration, double lift
-python src/05_explain.py                  # SHAP + GLM-vs-GBM effect plots
-echo "Done. See results/results.md"
+python src/05_explain.py                  # SHAP + GLM-vs-GBM effect plots (with GLM confidence intervals)
+python src/06_cv.py                       # 5-fold CV, selection nested in folds, vs a constant benchmark
+echo "Done. See results/results.md and results/cv_results.md"
