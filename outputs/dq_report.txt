@@ -1,0 +1,53 @@
+DATA SOURCE: real freMTPL2
+
+== row_counts_through_pipeline ==
+                                stage      n
+                             raw_freq 678013
+          clean_freq (valid, deduped) 678013
+                              raw_sev  26639
+               clean_sev (amount > 0)  26639
+model_severity (policies with claims)  24944
+
+== rows_flagged_by_rule ==
+ exposure_nonpositive  exposure_gt_1_capped  driver_age_invalid  veh_age_negative  veh_age_gt_20_capped_later  bonus_malus_below_50  duplicate_policy_rows
+                    0                  1224                   0                 0                        8322                     0                      0
+
+== severity_rows_with_no_matching_policy ==
+ orphan_claims  orphan_policies
+           195                6
+
+== claimnb_in_freq_vs_rows_in_sev ==
+ agree  disagree
+ 24943         1
+
+== claim_amount_percentiles ==
+ percentile  claim_amount
+         10         198.0
+         50        1172.0
+         90        2803.0
+         99       16799.0
+        100     4075401.0
+
+== split_sizes ==
+split  policies  claims  mean_severity
+ test      4997    5234         1862.0
+train     15001   15949         1882.0
+valid      4946    5261         1813.0
+
+== severity_by_driver_age_band ==
+driv_age_band  policies  claims  mean_severity
+     1: 18-24      1855    2011         2357.0
+     2: 25-29      2112    2245         1835.0
+     3: 30-39      5433    5725         1834.0
+     4: 40-49      6247    6566         1735.0
+     5: 50-59      5257    5623         1802.0
+     6: 60-69      2339    2470         1723.0
+       7: 70+      1701    1804         2309.0
+
+== severity_by_bonus_malus_band ==
+  bm_band  policies  claims  mean_severity
+    1: 50     11051   11592         1787.0
+ 2: 51-60      3394    3576         1840.0
+ 3: 61-80      5555    5914         1859.0
+4: 81-100      3810    4106         2094.0
+  5: 101+      1134    1256         1928.0

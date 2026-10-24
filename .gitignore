@@ -1,0 +1,4 @@
+data/claims.db
+data/raw/
+__pycache__/
+*.pyc
