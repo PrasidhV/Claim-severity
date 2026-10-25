@@ -21,6 +21,8 @@ actuary would build, and which one would I trust to price with? Pure premium is 
 | 11 | Python | `src/11_freq_explain.py` | SHAP and GLM-vs-GBM effects for frequency |
 | 12 | **R** + Python | `r/12_freq_glm_plus.R`, `src/glm_plus.py`, `src/12_freq_glm_plus.py` | A better-specified frequency GLM (piecewise-linear splines, bonus-malus = 50 indicator, two interactions chosen by a Rao score test on the training data only) scored on the same nested folds, to test whether the GBM's edge is just a basic GLM |
 | 13 | Python | `src/13_freq_gbm_additive.py` | GBM complexity ladder (stumps = additive, up to 32 leaves) to show whether the GBM's edge is interactions or main-effect shape |
+| 14 | Python | `src/14_freq_interactions.py` | Which interactions the frequency GBM relies on: Friedman H-statistic on the log-rate scale (validated on a planted-interaction test) plus SHAP interaction values, with pattern heatmaps for the top pairs; validation split only |
+| 15 | Python | `src/15_freq_glm_from_gbm.py` | Adds the GBM-identified interactions (brand x vehicle age, region x density, region x driver age) to the GLM on the single split and measures how much of the gap they close, with parameter counts and bootstrap CIs; an upper-bound diagnostic, not a nested CV |
 | 6 | Python | `src/06_cv.py` | 5-fold cross-validation with model selection nested inside each fold: constant, driver-age-only GLM, full GLM, F-test-selected GLM, GBM |
 | – | Python | `src/02b_glm_crosscheck.py` | Same GLM re-fit in scikit-learn. Test deviance should match R to ~3 decimals; if it doesn't, one of them has a bug |
 
@@ -84,6 +86,8 @@ Numbers below are from the author's run on the real freMTPL2 data (deviance expl
 
 The GBM beats the banded GLM in all five folds by roughly 0.0118 mean Poisson deviance, against a fold-to-fold SD of well under 0.001. The better-specified GLM+ recovers only about 12-13% of that gap. A complexity ladder (GBM with 2, 3, 4, 8, 16, 32 leaves) shows that a purely additive GBM (no interactions) performs about the same as GLM+, while allowing one interaction per tree closes most of the remaining gap. So the GBM's advantage comes from interactions, not from smoother main effects.
 
+Which interactions? `results/freq_interactions.md` (Friedman H-statistic on the log-rate scale, validation split only) ranks vehicle age x brand first by a wide margin: that interaction is several times larger than brand's own main effect, i.e. brand matters mainly through how its risk changes with vehicle age. Region interacts moderately with many variables. Adding vehicle age x brand to the GLM on the single test split (`results/freq_glm_from_gbm.md`, GBM-guided, so an upper bound) lifts the share of the gap closed from about 13% to about 32% for roughly 50 extra parameters, with a gain whose bootstrap CI is clearly above zero. The region interactions did not generalise, and the other terms added almost nothing, so about two thirds of the GBM's advantage remains unexplained by any hand-built term tried.
+
 ## Which model I'd trust in practice
 **Severity: neither GBM nor full GLM.** On this data the rating factors carry almost no usable signal for cost per claim. The full GLM overfits (about 60 parameters, worse than a constant in most folds), and its apparent significance came from an F-test that used the wrong dispersion (see Methodological note). I would use a constant severity, or at most a driver-age adjustment (the one factor selected in every fold), and treat any GBM gain as unproven. The honest finding is that severity is mostly noise here.
 
@@ -93,12 +97,13 @@ The GBM beats the banded GLM in all five folds by roughly 0.0118 mean Poisson de
 3. **Out-of-time validation before use.** This dataset has no dates, so stability over time is untested. A random split flatters any flexible model.
 4. **A check that the gain is broad**, not concentrated in thin cells (rare region x brand combinations), where a GBM can extrapolate badly.
 
-If governance rules out a GBM, the fallback is the GLM+ (it beats the banded GLM in every fold) accepting that it leaves most of the available lift unused.
+If governance rules out a GBM, the fallback is the GLM+ with a vehicle age x brand interaction (GLM+ beats the banded GLM in every fold, and the brand x age term gains out of sample), accepting that it still leaves roughly two thirds of the GBM's lift unused. A middle path worth testing is a GBM fitted on top of the GLM's predictions as an offset, so the GLM carries the auditable structure and the GBM only learns the residual.
 
 ## Where this could be wrong
 - Single hash split plus 5-fold CV on one dataset; no time dimension.
 - The GBM's tuning grid was small and its chosen configuration sat at the edge of the grid, so the GBM's lead is probably understated.
-- GLM+ interaction candidates were limited to bilinear products of six numeric variables; a larger, hand-built GLM could narrow the gap further (the ladder suggests many moderate interactions, so it would need many terms).
+- The brand x vehicle-age term and the other GBM-identified interactions were chosen using the GBM's behaviour on the validation split and scored once on the test split; this is not a nested CV, so treat that result as an upper bound for a hand-built GLM.
+- GLM+ interaction candidates in the nested CV were limited to bilinear products of six numeric variables; a larger, hand-built GLM could narrow the gap further (the ladder suggests many moderate interactions, so it would need many terms).
 - Severity is capped at 100,000 per claim and the cap choice was not tested for sensitivity.
 
 ## Limitations
