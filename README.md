@@ -23,6 +23,8 @@ actuary would build, and which one would I trust to price with? Pure premium is 
 | 13 | Python | `src/13_freq_gbm_additive.py` | GBM complexity ladder (stumps = additive, up to 32 leaves) to show whether the GBM's edge is interactions or main-effect shape |
 | 14 | Python | `src/14_freq_interactions.py` | Which interactions the frequency GBM relies on: Friedman H-statistic on the log-rate scale (validated on a planted-interaction test) plus SHAP interaction values, with pattern heatmaps for the top pairs; validation split only |
 | 15 | Python | `src/15_freq_glm_from_gbm.py` | Adds the GBM-identified interactions (brand x vehicle age, region x density, region x driver age) to the GLM on the single split and measures how much of the gap they close, with parameter counts and bootstrap CIs; an upper-bound diagnostic, not a nested CV |
+| 16 | Python | `src/16_freq_hybrid.py` | Hybrid frequency model: GLM+ with brand x vehicle-age as the backbone, plus a GBM fitted on the ratio claims / GLM-expected-claims (same likelihood as an offset), compared with the pure GBM in nested CV; reports how hard the GBM correction pushes the GLM |
+| 17 | Python | `src/17_freq_hybrid_analysis.py` | Accuracy as a function of a cap on the GBM's correction (how much of the lift survives a +/-5..50% limit), and a shallow-tree segment profile of where the GLM is wrong |
 | 6 | Python | `src/06_cv.py` | 5-fold cross-validation with model selection nested inside each fold: constant, driver-age-only GLM, full GLM, F-test-selected GLM, GBM |
 | – | Python | `src/02b_glm_crosscheck.py` | Same GLM re-fit in scikit-learn. Test deviance should match R to ~3 decimals; if it doesn't, one of them has a bug |
 
