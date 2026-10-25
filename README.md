@@ -25,6 +25,7 @@ actuary would build, and which one would I trust to price with? Pure premium is 
 | 15 | Python | `src/15_freq_glm_from_gbm.py` | Adds the GBM-identified interactions (brand x vehicle age, region x density, region x driver age) to the GLM on the single split and measures how much of the gap they close, with parameter counts and bootstrap CIs; an upper-bound diagnostic, not a nested CV |
 | 16 | Python | `src/16_freq_hybrid.py` | Hybrid frequency model: GLM+ with brand x vehicle-age as the backbone, plus a GBM fitted on the ratio claims / GLM-expected-claims (same likelihood as an offset), compared with the pure GBM in nested CV; reports how hard the GBM correction pushes the GLM |
 | 17 | Python | `src/17_freq_hybrid_analysis.py` | Accuracy as a function of a cap on the GBM's correction (how much of the lift survives a +/-5..50% limit), and a shallow-tree segment profile of where the GLM is wrong |
+| 18 | Python | `src/18_freq_bm_levels.py` | Level-by-level bonus-malus calibration of the GLM and the GBM's correction (looks for a saw-tooth the smooth splines miss), then a nested CV of the GLM with one indicator per well-populated BM level; validated with a planted-spike control |
 | 6 | Python | `src/06_cv.py` | 5-fold cross-validation with model selection nested inside each fold: constant, driver-age-only GLM, full GLM, F-test-selected GLM, GBM |
 | – | Python | `src/02b_glm_crosscheck.py` | Same GLM re-fit in scikit-learn. Test deviance should match R to ~3 decimals; if it doesn't, one of them has a bug |
 
@@ -67,9 +68,9 @@ For the Poisson frequency GLM the issue is related: R's `summary()` fixes the Po
 For the severity GLM, R's `drop1(fit, test = "F")` scales the test by the *deviance-based* dispersion (residual deviance divided by residual degrees of freedom), whereas `summary()` reports the *Pearson* dispersion. For well-behaved data these are close. For heavy-tailed claim severities they can differ several-fold, which makes every F-statistic look far more impressive than it is and nearly every rating factor appear significant. `r/02_glm.R` therefore refits the model without each term and computes the F-test with the Pearson dispersion (output: `outputs/glm_term_tests.csv`). `src/06_cv.py` uses the same test when it selects factors inside each fold.
 
 ## Results
-Numbers below are from the author's run on the real freMTPL2 data (deviance explained is relative to predicting one constant for everyone; severity and frequency use different deviances, so compare models within a table, not across). Full tables and plots are in `results/`; rerun the pipeline to reproduce them.
+Numbers are from the author's run on the real freMTPL2 data (rounded; full tables and plots in `results/`, reproducible with `run_all.sh`). Deviance explained is relative to predicting one constant for everyone; severity and frequency use different deviances, so compare models within a table, not across.
 
-**Severity** (average cost per claim; 24,944 policies with claims; `results/cv_results.md`, 5-fold CV)
+### Severity (cost per claim; 24,944 policies with claims; `results/cv_results.md`, 5-fold CV)
 
 | Model | Beats the constant? |
 |---|---|
@@ -78,34 +79,42 @@ Numbers below are from the author's run on the real freMTPL2 data (deviance expl
 | GLM on driver age only | Small gain (about 0.4% of deviance), not distinguishable from noise |
 | GBM | Borderline (about 0.5% of deviance, 4 of 5 folds); discounted for tuning on overlapping data |
 
-**Frequency** (claims per exposure-year; 678,013 policies; `results/freq_cv_results.md`, `results/freq_glm_plus_results.md`, `results/freq_gbm_ladder.md`)
+### Frequency (claims per exposure-year; 678,013 policies; 5-fold CV)
 
-| Model | Deviance explained (5-fold CV) |
-|---|---|
-| Banded GLM (R) | about 5.2% |
-| GLM+ (splines and two screened interactions) | about 5.6% |
-| GBM (LightGBM, Poisson) | about 8.7% |
+| Model | Parameters (approx.) | Deviance explained | Share of banded-GLM-to-GBM gap closed |
+|---|--:|--:|--:|
+| Banded GLM (R) | 60 | 5.2% | 0% |
+| GLM+ (splines + 2 Rao-screened interactions) | 77 | 5.6% | 13% |
+| GLM* (GLM+ + vehicle age x brand) | 127 | 6.3% | 31% |
+| GLM* + one indicator per bonus-malus level | 150 | about 7.0% | 50% |
+| Hybrid (GLM* + GBM correction) | n/a | 8.6% | 97% |
+| GBM (LightGBM, Poisson) | n/a | 8.7% | 100% |
 
-The GBM beats the banded GLM in all five folds by roughly 0.0118 mean Poisson deviance, against a fold-to-fold SD of well under 0.001. The better-specified GLM+ recovers only about 12-13% of that gap. A complexity ladder (GBM with 2, 3, 4, 8, 16, 32 leaves) shows that a purely additive GBM (no interactions) performs about the same as GLM+, while allowing one interaction per tree closes most of the remaining gap. So the GBM's advantage comes from interactions, not from smoother main effects.
-
-Which interactions? `results/freq_interactions.md` (Friedman H-statistic on the log-rate scale, validation split only) ranks vehicle age x brand first by a wide margin: that interaction is several times larger than brand's own main effect, i.e. brand matters mainly through how its risk changes with vehicle age. Region interacts moderately with many variables. Adding vehicle age x brand to the GLM on the single test split (`results/freq_glm_from_gbm.md`, GBM-guided, so an upper bound) lifts the share of the gap closed from about 13% to about 32% for roughly 50 extra parameters, with a gain whose bootstrap CI is clearly above zero. The region interactions did not generalise, and the other terms added almost nothing, so about two thirds of the GBM's advantage remains unexplained by any hand-built term tried.
+### What the investigation found
+1. **The GBM's lead is real but was overstated by a crude baseline.** It beats the banded GLM by about 0.0118 mean Poisson deviance in all five folds (fold SD well under 0.001). Giving the GLM smooth splines recovered little: an additive GBM (stumps, no interactions) performs about the same as GLM+. Allowing one interaction per tree closes most of the rest, so the gap is interactions and level-specific structure, not smoother curves (`freq_gbm_ladder.md`).
+2. **Vehicle age x brand is a real interaction.** It is the strongest by far in the GBM (several times larger than brand's own main effect, `freq_interactions.md`), and adding it to the GLM gains out of sample with a bootstrap CI clearly above zero (`freq_glm_from_gbm.md`). The region interactions did not generalise.
+3. **Bonus-malus has level-specific effects a smooth curve misses.** The segment analysis of the hybrid's corrections split almost entirely on specific bonus-malus values: levels 62-63 were under-predicted by the GLM by up to about 2.3x (older vehicles), while neighbouring levels 60-61 and 64 were over-predicted. That saw-tooth is plausibly the French malus step (a floor-50 driver with one at-fault claim lands near 62.5); this README does not verify that mechanism. One indicator per well-populated level (23 per fold, levels chosen on training folds) improves every fold and lifts the share of the gap closed from about 31% to about 50% (`freq_bm_levels.md`). The idea was found in held-out predictions from these same folds, so treat this as an upper bound.
+4. **The GBM correction on top of a GLM is large, not a light top-up.** The hybrid matches the pure GBM to within 0.0003 (pure GBM better in all five folds), but the GBM moves about 70% of policies' GLM predictions by more than 10% (5th to 95th percentile factor roughly 0.58 to 1.58). Capping the correction costs accuracy steadily: a +/-20% cap keeps about two thirds of the lift (`freq_hybrid.md`, `freq_hybrid_analysis.md`). A depth-3 tree explains only about 11% of the correction's variance, so beyond the bonus-malus levels it is a diffuse web.
 
 ## Which model I'd trust in practice
-**Severity: neither GBM nor full GLM.** On this data the rating factors carry almost no usable signal for cost per claim. The full GLM overfits (about 60 parameters, worse than a constant in most folds), and its apparent significance came from an F-test that used the wrong dispersion (see Methodological note). I would use a constant severity, or at most a driver-age adjustment (the one factor selected in every fold), and treat any GBM gain as unproven. The honest finding is that severity is mostly noise here.
+**Severity: neither GBM nor full GLM.** The rating factors carry almost no usable signal for cost per claim here. The full GLM overfits (about 60 parameters, worse than a constant in most folds), and its apparent significance came from an F-test that used the wrong dispersion (see Methodological note). I would use a constant severity, or at most a driver-age adjustment (the one factor selected in every fold). The honest finding is that severity is mostly noise.
 
-**Frequency: the GBM, with conditions.** It is clearly and consistently better than the GLM, and giving the GLM splines and screened interactions did not close the gap, so "the GLM was just crude" is not the explanation. Since severity barely varies by risk, pure premium differences across policies are driven almost entirely by frequency, so this choice largely decides the pricing model. I would deploy it only with:
-1. **SHAP-based reason codes** for every score, and SHAP interaction values reviewed to see *which* interactions it relies on (the ladder says how much, not which).
-2. **The GLM kept as the benchmark**, with the GBM monitored against it (decile calibration and double lift on new data), because a GLM can be filed, audited and explained to a regulator more easily.
-3. **Out-of-time validation before use.** This dataset has no dates, so stability over time is untested. A random split flatters any flexible model.
-4. **A check that the gain is broad**, not concentrated in thin cells (rare region x brand combinations), where a GBM can extrapolate badly.
+**Frequency: the GBM for accuracy, but the margin is narrower than it first looked.** The pure GBM is the most accurate model and I would deploy it only with:
+1. **SHAP-based reason codes** for every score and the interaction analysis reviewed, not just importances.
+2. **A well-built GLM kept as the monitored benchmark.** The GLM* with bonus-malus levels is a credible one: it closes about half the gap with roughly 150 interpretable parameters.
+3. **Out-of-time validation before use.** The dataset has no dates, so stability over time is untested, and a random split flatters any flexible model.
+4. **A check that the gain is broad,** not concentrated in thin cells (rare brand x age or region combinations), where a GBM can extrapolate badly.
 
-If governance rules out a GBM, the fallback is the GLM+ with a vehicle age x brand interaction (GLM+ beats the banded GLM in every fold, and the brand x age term gains out of sample), accepting that it still leaves roughly two thirds of the GBM's lift unused. A middle path worth testing is a GBM fitted on top of the GLM's predictions as an offset, so the GLM carries the auditable structure and the GBM only learns the residual.
+**If governance requires a GLM,** use GLM* with bonus-malus level indicators. It leaves about half of the GBM's lift unused, and the earlier bonus-malus lesson suggests other integer variables (driver age, vehicle age) may hide similar level-specific effects that I have not tested; a GLM that treats them as levels might close more. The hybrid is not a good compromise: its correction is too large to count as a bounded adjustment, and it is slightly less accurate than the pure GBM.
+
+**The main lesson:** a GBM beating a GLM is weak evidence for the GBM until the GLM has been given a fair chance. Here, about half of the apparent GBM advantage turned out to be two specification problems (a discrete variable treated as smooth, and one additive-only interaction), found by using the GBM as a diagnostic.
 
 ## Where this could be wrong
 - Single hash split plus 5-fold CV on one dataset; no time dimension.
 - The GBM's tuning grid was small and its chosen configuration sat at the edge of the grid, so the GBM's lead is probably understated.
-- The brand x vehicle-age term and the other GBM-identified interactions were chosen using the GBM's behaviour on the validation split and scored once on the test split; this is not a nested CV, so treat that result as an upper bound for a hand-built GLM.
-- GLM+ interaction candidates in the nested CV were limited to bilinear products of six numeric variables; a larger, hand-built GLM could narrow the gap further (the ladder suggests many moderate interactions, so it would need many terms).
+- The vehicle age x brand term and the bonus-malus levels were found by looking at the GBM or at held-out predictions from these same folds. Terms and levels are fitted on training data only, but the choice of *which* structure to add was informed by the answer, so the GLM figures above are optimistic. There is no fresh data to confirm them on.
+- The bonus-malus explanation (French malus step) is a hypothesis consistent with the pattern, not something verified here.
+- GLM+ interaction candidates in the nested CV were limited to bilinear products of six numeric variables.
 - Severity is capped at 100,000 per claim and the cap choice was not tested for sensitivity.
 
 ## Limitations
